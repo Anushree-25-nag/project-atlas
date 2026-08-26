@@ -301,5 +301,8 @@ elif page == "ℹ️ About Project":
     ### 🏆 AI-Powered HR Analytics System
     - **Problem Solved:** 25% Attrition costing ₹8.5 Crores
     - **Outcome:** ₹3.4 Crores Annual Savings | 1,682% ROI | 90-day Early Warning
-    - **Author:** [Your Name] — AI Business Analyst
+    - **Author:** Anushree Nag — AI Business Analyst
+    - **GitHub Repository:** [github.com/anushree-25-nag/project-atlas](https://github.com/anushree-25-nag/project-atlas)
+    - **LinkedIn:** https://www.linkedin.com/in/anushreenag/ 
+    - **Email:** naganu025@gmail.com
     ''')
