@@ -88,7 +88,7 @@ Facing an unsustainable **25% annual employee attrition rate** costing **₹8.5 
 > *High-level C-Suite KPI cards, departmental variance bar charts with average reference benchmarks, overtime retention penalty visuals, and interactive regional slicers.*
 
 <p align="center">
-  <img src="powerbi_page1.png" width="900" alt="Power BI Page 1 — Executive Summary">
+  <img src="Screenshot 2026-09-20 194454.png" width="900" alt="Power BI Page 1 — Executive Summary">
 </p>
 
 ---
@@ -97,7 +97,7 @@ Facing an unsustainable **25% annual employee attrition rate** costing **₹8.5 
 > *Compensation gap analysis (Stayed vs. Left), 0–2 year flight-risk tenure danger window, 4-pillar satisfaction heatmap matrix, and prioritized top at-risk employee intervention table.*
 
 <p align="center">
-  <img src="powerbi_page2.png" width="900" alt="Power BI Page 2 — Risk & Salary Diagnostics">
+  <img src="Screenshot 2026-09-20 194522.png" width="900" alt="Power BI Page 2 — Risk & Salary Diagnostics">
 </p>
 
 *💡 Note: The raw interactive Power BI file is available in this repository: [`Project_Atlas_HR_Analytics.pbix`](Project_Atlas_HR_Analytics.pbix).*
