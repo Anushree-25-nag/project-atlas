@@ -218,6 +218,9 @@ if page == "🏠 Executive Dashboard":
 # ============================================
 # PAGE 2: POWER BI ENTERPRISE DASHBOARD
 # ============================================
+# ============================================
+# PAGE: POWER BI ENTERPRISE DASHBOARD
+# ============================================
 elif page == "📊 Power BI Dashboard":
 
     st.title("📊 Power BI Enterprise HR Analytics Dashboard")
@@ -244,9 +247,9 @@ elif page == "📊 Power BI Dashboard":
         - **Core Insights:** Exposes a 3x higher turnover rate among overtime staff and flags Sales & Technology as the highest flight-risk units.
         """)
         try:
-            st.image("powerbi_page1.png", caption="Power BI Dashboard — Page 1: Executive Summary", use_container_width=True)
+            st.image("Screenshot 2026-09-20 194454.png", caption="Power BI Dashboard — Page 1: Executive Summary", use_container_width=True)
         except Exception:
-            st.warning("Upload `powerbi_page1.png` to your GitHub repo to render this view.")
+            st.warning("Upload `Screenshot 2026-09-20 194454.png` to your GitHub repo to render this view.")
 
     with tab2:
         st.markdown("### 🔬 Page 2: Root-Cause Risk & Salary Diagnostics")
@@ -255,10 +258,9 @@ elif page == "📊 Power BI Dashboard":
         - **Operational Impact:** Displays the multi-dimensional satisfaction heatmap and prioritizes the Top 50 at-risk employees for immediate 1:1 manager outreach.
         """)
         try:
-            st.image("powerbi_page2.png", caption="Power BI Dashboard — Page 2: Risk & Salary Diagnostics", use_container_width=True)
+            st.image("Screenshot 2026-09-20 194522.png", caption="Power BI Dashboard — Page 2: Risk & Salary Diagnostics", use_container_width=True)
         except Exception:
-            st.warning("Upload `powerbi_page2.png` to your GitHub repo to render this view.")
-
+            st.warning("Upload `Screenshot 2026-09-20 194522.png` to your GitHub repo to render this view.")
 # ============================================
 # PAGE 3: RISK ASSESSMENT TOOL
 # ============================================
