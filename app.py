@@ -10,7 +10,6 @@ import numpy as np
 import plotly.express as px
 import plotly.graph_objects as go
 import os
-import re
 from groq import Groq
 
 # --- 1. PAGE CONFIGURATION ---
@@ -59,97 +58,122 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# --- 3. HARDCODED HR POLICIES KNOWLEDGE BASE ---
+# --- 3. OFFICIAL HR POLICY KNOWLEDGE BASE ---
 HR_POLICIES_TEXT = """
 LEAVE ENTITLEMENTS:
-- Annual Leave: 24 days per year (accrues at 2 days/month). Up to 30 days can be carried forward.
-- Sick Leave: 12 days per year (medical certificate required if >3 consecutive days).
-- Casual Leave: 12 days per year for personal/family matters (max 3 consecutive days).
+- Annual Leave: 24 days per year (accrues at 2 days/month). Up to 30 days can be carried forward to next calendar year.
+- Sick Leave: 12 days per year (medical certificate required if taking >3 consecutive days).
+- Casual Leave: 12 days per year for personal/family matters (max 3 consecutive days allowed at once).
 - Maternity Leave: 26 weeks fully paid leave as per Maternity Benefit Act.
 - Paternity Leave: 15 days paid leave within 6 months of childbirth.
 - Marriage Leave: 5 days paid leave for employee's marriage.
 - Bereavement Leave: 5 days paid leave for immediate family members.
 
-COMPENSATION & BENEFITS:
+COMPENSATION, INCREMENTS & BENEFITS:
 - CTC Structure: Basic Salary = 40%, HRA = 20%, Special Allowance = 40%.
-- Annual Increments: Rating 4 (Outstanding) = 20-25%; Rating 3 (Exceeds) = 12-18%; Rating 2 (Meets) = 8-12%; Rating 1 = 0-5%.
-- Health Insurance: ₹5,00,000 comprehensive family medical cover (Self, Spouse, 2 Children).
-- Learning Allowance: ₹25,000 annual skill enhancement & certification budget per employee.
-- Variable Pay: 10% for Junior (Grades 1-3), 15-20% for Mid (Grades 4-6), 25-35% for Senior (Grade 7+).
+- Annual Increments by Rating:
+  * Rating 4 (Outstanding - Top 10% staff): 20% to 25% annual increment.
+  * Rating 3 (Exceeds Expectations - Top 25% staff): 12% to 18% annual increment.
+  * Rating 2 (Meets Expectations - 55% staff): 8% to 12% annual increment.
+  * Rating 1 (Needs Improvement): 0% to 5% increment (placed on PIP).
+- Healthcare Cover: ₹5,00,000 comprehensive family medical insurance (Self, Spouse, 2 Children).
+- Learning Allowance: ₹25,000 annual skill development & certification budget per employee.
+- Variable Pay: 10% for Junior Grades (1-3), 15-20% for Mid Grades (4-6), 25-35% for Senior Grades (7+).
 
 WORK FROM HOME (WFH) & HYBRID GUIDELINES:
-- Hybrid Schedule: 3 days in-office, 2 days remote weekly (Monday/Friday preferred WFH days).
-- Eligibility: Completed minimum 6 months tenure with Performance Rating >= 2.
-- Core Availability Hours: 10:00 AM – 5:00 PM IST.
+- Hybrid Schedule: 3 days in-office, 2 days remote weekly (Monday and Friday preferred WFH days).
+- Eligibility: Minimum 6 months completed service with Performance Rating >= 2.
+- Core Working Hours: 10:00 AM – 5:00 PM IST.
 - Internet Subsidy: ₹1,000 monthly utility & broadband reimbursement.
-- Home Office Setup: ₹2,000 one-time initial home workstation allowance.
+- Home Setup Allowance: ₹2,000 one-time initial home workstation allowance.
 
 PERFORMANCE MANAGEMENT & PROMOTIONS:
-- Review Frequency: Mid-year review in September (Developmental); Annual appraisal in March.
-- Promotion Criteria: Minimum 2 years in current role with Rating 3+ for 2 consecutive cycles.
-- Performance Improvement Plan (PIP): Standard 90-day duration with weekly structured check-ins.
+- Appraisal Cycles: Mid-year review in September (Developmental); Annual rating & appraisal in March.
+- Promotion Criteria: Minimum 2 years in current role with consecutive Rating 3+ reviews.
+- Performance Improvement Plan (PIP): Standard 90-day duration with weekly structured 1:1 check-ins.
 """
 
-# --- 4. SMART AI ENGINE (GROQ + DIRECT RAG FALLBACK) ---
+# --- 4. SECURE AI CLIENT ---
 api_key = st.secrets.get("GROQ_API_KEY", os.environ.get("GROQ_API_KEY", ""))
-client = Groq(api_key=api_key) if api_key and api_key.startswith("gsk_") else None
+client = Groq(api_key=api_key) if api_key and str(api_key).startswith("gsk_") else None
 
-def get_policy_fallback_answer(query):
-    q_lower = query.lower()
-    if any(k in q_lower for k in ["leave", "holiday", "vacation", "annual", "sick", "casual"]):
+def get_policy_fallback_answer(user_question):
+    """Smart targeted fallback inspecting ONLY user question text"""
+    q = str(user_question).lower()
+    if any(k in q for k in ["wfh", "home", "remote", "hybrid", "internet", "subsidy", "broadband"]):
+        return ("**🏠 TechCorp Work From Home (WFH) & Hybrid Guidelines:**\n\n"
+                "• **Hybrid Schedule:** 3 days in-office, 2 days remote weekly (Mon & Fri preferred).\n"
+                "• **Eligibility:** Minimum 6 months completed tenure with rating $\\ge 2$.\n"
+                "• **Core Hours:** Must be available between **10:00 AM – 5:00 PM IST**.\n"
+                "• **Subsidies:** **₹1,000/month** broadband reimbursement + **₹2,000** one-time home office setup allowance.")
+    elif any(k in q for k in ["increment", "hike", "salary", "rating", "bonus", "ctc", "insurance", "compensation", "benefit"]):
+        return ("**📈 Compensation, Increments & Benefits Matrix:**\n\n"
+                "• **Rating 4 (Outstanding):** **20% – 25%** annual increment.\n"
+                "• **Rating 3 (Exceeds Expectations):** **12% – 18%** annual increment.\n"
+                "• **Rating 2 (Meets Expectations):** **8% – 12%** annual increment.\n"
+                "• **Rating 1 (Needs Improvement):** **0% – 5%** increment.\n"
+                "• **Healthcare:** **₹5,00,000** comprehensive family health insurance.\n"
+                "• **Learning Budget:** **₹25,000/year** allowance per employee for certifications.")
+    elif any(k in q for k in ["promotion", "pip", "performance", "review", "appraisal", "cycle"]):
+        return ("**🏆 Performance Management & Promotion Guidelines:**\n\n"
+                "• **Appraisal Cycles:** Mid-year in September; Annual increment in March.\n"
+                "• **Promotion Eligibility:** Minimum 2 years in current role with consecutive Rating 3+.\n"
+                "• **Performance Improvement Plan (PIP):** 90-day structured roadmap with weekly 1:1 check-ins.")
+    elif any(k in q for k in ["leave", "holiday", "vacation", "annual", "sick", "casual", "maternity", "paternity", "marriage", "bereavement"]):
         return ("**🌴 Official TechCorp Leave Entitlements:**\n\n"
-                "• **Annual Leave:** 24 days/year (accrues at 2 days/month, max 30 days carry-forward).\n"
-                "• **Casual Leave:** 12 days/year for personal/family matters.\n"
-                "• **Sick Leave:** 12 days/year (doctor's certificate required if >3 days).\n"
+                "• **Annual Leave:** 24 days/year (accrues at 2 days/month, up to 30 days carry-forward).\n"
+                "• **Casual Leave:** 12 days/year for personal/emergency matters.\n"
+                "• **Sick Leave:** 12 days/year (medical certificate required if >3 consecutive days).\n"
                 "• **Maternity/Paternity:** 26 weeks paid maternity leave; 15 days paid paternity leave.\n"
                 "• **Marriage & Bereavement:** 5 days paid marriage leave; 5 days bereavement leave.\n\n"
                 "📌 *Apply via HRMS portal at least 3 days in advance.*")
-    elif any(k in q_lower for k in ["wfh", "home", "remote", "hybrid", "internet", "subsidy"]):
-        return ("**🏠 Work From Home (WFH) & Hybrid Guidelines:**\n\n"
-                "• **Hybrid Model:** 3 days in-office, 2 days remote (typically Mon/Fri).\n"
-                "• **Eligibility:** Minimum 6 months tenure with rating >= 2.\n"
-                "• **Core Hours:** Must be available between 10:00 AM – 5:00 PM IST.\n"
-                "• **Reimbursements:** ₹1,000 monthly broadband reimbursement + ₹2,000 one-time home setup allowance.")
-    elif any(k in q_lower for k in ["increment", "hike", "salary", "rating", "bonus", "ctc", "insurance", "compensation"]):
-        return ("**📈 Compensation, Increment & Benefits Matrix:**\n\n"
-                "• **Rating 4 (Outstanding):** 20% – 25% annual increment.\n"
-                "• **Rating 3 (Exceeds Expectations):** 12% – 18% annual increment.\n"
-                "• **Rating 2 (Meets Expectations):** 8% – 12% annual increment.\n"
-                "• **Medical Insurance:** ₹5,00,000 family health cover.\n"
-                "• **Learning Budget:** ₹25,000 annual allowance per employee for courses & certifications.")
-    elif any(k in q_lower for k in ["promotion", "pip", "performance", "review"]):
-        return ("**🏆 Performance Management & Promotion Guidelines:**\n\n"
-                "• **Review Cycles:** Mid-year in September; Annual appraisal in March.\n"
-                "• **Promotion Eligibility:** Minimum 2 years in current role with consecutive Rating 3+.\n"
-                "• **PIP (Performance Improvement Plan):** 90-day structured roadmap with weekly 1:1 manager check-ins.")
     else:
-        return ("**TechCorp India HR Policy Information:**\n\n"
+        return ("**TechCorp India Corporate Policy Summary:**\n\n"
                 "• **Annual Leave:** 24 days | **Sick/Casual:** 12 days each\n"
-                "• **Hybrid Work:** 3 days office / 2 days WFH (₹1,000 monthly allowance)\n"
-                "• **Salary Hike:** Rating 3 = 12-18% | Rating 4 = 20-25%\n"
+                "• **Hybrid Work:** 3 days office / 2 days WFH (₹1,000/mo allowance)\n"
+                "• **Salary Hike:** Rating 3 = 12–18% | Rating 4 = 20–25%\n"
                 "• **Healthcare:** ₹5 Lakhs Family Insurance | **L&D:** ₹25,000 yearly allowance\n\n"
-                "📌 *For specific custom queries, please reach out to `hr@techcorp.com`.*")
+                "📌 *For customized inquiries, please contact `hr@techcorp.com`.*")
 
-def ask_ai(prompt, system_message=None):
+def ask_hr_bot(user_question):
+    """Primary LLaMA 3.3 RAG Agent with dynamic fallback"""
     if client:
-        # Try Primary LLaMA 3.3 70B
-        for model_name in ["llama-3.3-70b-versatile", "llama-3.1-8b-instant"]:
+        for model_id in ["llama-3.3-70b-versatile", "llama-3.1-8b-instant"]:
             try:
-                messages = []
-                if system_message:
-                    messages.append({"role": "system", "content": system_message})
-                messages.append({"role": "user", "content": prompt})
                 response = client.chat.completions.create(
-                    model=model_name,
-                    messages=messages,
+                    model=model_id,
+                    messages=[
+                        {
+                            "role": "system",
+                            "content": f"You are the official TechCorp HR Assistant. Answer the employee's question directly, accurately, and concisely using ONLY this policy text:\n\n{HR_POLICIES_TEXT}"
+                        },
+                        {"role": "user", "content": user_question}
+                    ],
                     temperature=0.2,
-                    max_tokens=500
+                    max_tokens=450
                 )
                 return response.choices[0].message.content
             except Exception:
                 continue
-    # Instant Smart Fallback if API is offline
-    return get_policy_fallback_answer(prompt)
+    return get_policy_fallback_answer(user_question)
+
+def ask_ai_retention(prompt):
+    """AI engine for risk assessment recommendations"""
+    if client:
+        try:
+            response = client.chat.completions.create(
+                model="llama-3.3-70b-versatile",
+                messages=[
+                    {"role": "system", "content": "You are a Senior Talent Retention Specialist for Indian IT enterprises. Provide 3 specific, prioritized retention actions with INR costs under 100 words."},
+                    {"role": "user", "content": prompt}
+                ],
+                temperature=0.3,
+                max_tokens=300
+            )
+            return response.choices[0].message.content
+        except Exception:
+            pass
+    return "1. Schedule emergency 1:1 meeting to address workload & satisfaction concerns.\n2. Initiate immediate compensation market benchmarking (10-15% adjustment: ~₹35,000).\n3. Define clear 12-month promotion milestones with quarterly check-ins."
 
 # --- 5. DATA LOADER ---
 @st.cache_data
@@ -161,7 +185,7 @@ def load_data():
 
 df = load_data()
 
-# --- 6. SIDEBAR NAVIGATION ---
+# --- 6. SIDEBAR ---
 st.sidebar.markdown("""
 <div style="text-align:center; padding:1rem; background:linear-gradient(135deg,#1C1C2E,#2E86AB); border-radius:10px; margin-bottom:1rem;">
 <h2 style="color:white; margin:0; font-size:1.3rem;">🏆 Project Atlas</h2>
@@ -424,7 +448,7 @@ elif page == "🔍 Risk Assessment":
                 Employee Profile: Age={age}, Department={department}, Income=₹{monthly_income:,}, Job Satisfaction={job_sat}/4, Work Life Balance={wlb}/4, Overtime={overtime}, Promotion Gap={years_promotion} years, Risk Score={risk_score}%.
                 Provide 3 prioritized, highly specific retention initiatives with estimated costs in INR. Keep response under 100 words.
                 """
-                recs = ask_ai(prompt, "You are a Senior Talent Retention Specialist.")
+                recs = ask_ai_retention(prompt)
                 st.markdown(recs)
 
 # ============================================
@@ -439,47 +463,41 @@ elif page == "🤖 HR Policy Chatbot":
     q1, q2, q3 = st.columns(3)
     with q1:
         if st.button("🌴 Annual Leave Entitlement", use_container_width=True):
-            st.session_state.quick_inquiry = "What is the annual leave entitlement and carry-forward policy?"
+            st.session_state.current_query = "What is the annual leave entitlement and carry-forward policy?"
     with q2:
         if st.button("🏠 Hybrid / WFH Guidelines", use_container_width=True):
-            st.session_state.quick_inquiry = "What are the rules and subsidies for working from home?"
+            st.session_state.current_query = "What are the rules and subsidies for working from home?"
     with q3:
         if st.button("📈 Performance Hike Bands", use_container_width=True):
-            st.session_state.quick_inquiry = "What are the salary increment percentages by performance rating?"
+            st.session_state.current_query = "What are the salary increment percentages by performance rating?"
 
     if "chat_history" not in st.session_state:
         st.session_state.chat_history = []
 
     # Handle quick button selection
-    if "quick_inquiry" in st.session_state:
-        inquiry = st.session_state.quick_inquiry
-        del st.session_state.quick_inquiry
-        st.session_state.chat_history.append({"role": "user", "content": inquiry})
+    if "current_query" in st.session_state:
+        user_q = st.session_state.current_query
+        del st.session_state.current_query
+        st.session_state.chat_history.append({"role": "user", "content": user_q})
         with st.spinner("Retrieving verified policy articles..."):
-            answer = ask_ai(
-                f"Policy Documentation:\n{HR_POLICIES_TEXT}\n\nEmployee Query: {inquiry}",
-                "You are the official TechCorp HR Assistant. Answer directly using provided policy text."
-            )
-        st.session_state.chat_history.append({"role": "assistant", "content": answer})
+            ans = ask_hr_bot(user_q)
+        st.session_state.chat_history.append({"role": "assistant", "content": ans})
 
-    # Render all chat bubbles
+    # Render chat bubbles
     for msg in st.session_state.chat_history:
         with st.chat_message(msg["role"]):
             st.markdown(msg["content"])
 
     # Natural language chat input bar
-    if user_input := st.chat_input("Ask any question regarding leave, compensation, WFH, or HR policies..."):
-        st.session_state.chat_history.append({"role": "user", "content": user_input})
+    if typed_q := st.chat_input("Ask any question regarding leave, compensation, WFH, or HR policies..."):
+        st.session_state.chat_history.append({"role": "user", "content": typed_q})
         with st.chat_message("user"):
-            st.markdown(user_input)
+            st.markdown(typed_q)
         with st.chat_message("assistant"):
             with st.spinner("Retrieving policy context..."):
-                answer = ask_ai(
-                    f"Policy Documentation:\n{HR_POLICIES_TEXT}\n\nEmployee Query: {user_input}",
-                    "You are the official TechCorp HR Assistant. Answer directly using provided policy text."
-                )
-            st.markdown(answer)
-        st.session_state.chat_history.append({"role": "assistant", "content": answer})
+                ans = ask_hr_bot(typed_q)
+            st.markdown(ans)
+        st.session_state.chat_history.append({"role": "assistant", "content": ans})
 
 # ============================================
 # PAGE 5: ROI CALCULATOR
@@ -499,7 +517,10 @@ elif page == "💰 ROI Calculator":
 
     with rc2:
         st.markdown("### 🎯 Projected Outcomes")
-        target_rate = st.slider("Target Turnover Rate Post-AI (%)", 5.0, float(current_rate), max(float(current_rate)*0.6, 5.0), 0.5)
+        target_rate = st.slider(
+            "Target Turnover Rate Post-AI (%)",
+            5.0, float(current_rate), max(float(current_rate)*0.6, 5.0), 0.5
+        )
 
         cur_exits = int(total_emp * current_rate / 100)
         cur_cost = cur_exits * cost_per_hire
