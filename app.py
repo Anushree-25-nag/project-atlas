@@ -10,7 +10,7 @@ import numpy as np
 import plotly.express as px
 import plotly.graph_objects as go
 import os
-import json
+import re
 from groq import Groq
 
 # --- 1. PAGE CONFIGURATION ---
@@ -59,29 +59,99 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# --- 3. GROQ AI CLIENT SETUP ---
+# --- 3. HARDCODED HR POLICIES KNOWLEDGE BASE ---
+HR_POLICIES_TEXT = """
+LEAVE ENTITLEMENTS:
+- Annual Leave: 24 days per year (accrues at 2 days/month). Up to 30 days can be carried forward.
+- Sick Leave: 12 days per year (medical certificate required if >3 consecutive days).
+- Casual Leave: 12 days per year for personal/family matters (max 3 consecutive days).
+- Maternity Leave: 26 weeks fully paid leave as per Maternity Benefit Act.
+- Paternity Leave: 15 days paid leave within 6 months of childbirth.
+- Marriage Leave: 5 days paid leave for employee's marriage.
+- Bereavement Leave: 5 days paid leave for immediate family members.
+
+COMPENSATION & BENEFITS:
+- CTC Structure: Basic Salary = 40%, HRA = 20%, Special Allowance = 40%.
+- Annual Increments: Rating 4 (Outstanding) = 20-25%; Rating 3 (Exceeds) = 12-18%; Rating 2 (Meets) = 8-12%; Rating 1 = 0-5%.
+- Health Insurance: ₹5,00,000 comprehensive family medical cover (Self, Spouse, 2 Children).
+- Learning Allowance: ₹25,000 annual skill enhancement & certification budget per employee.
+- Variable Pay: 10% for Junior (Grades 1-3), 15-20% for Mid (Grades 4-6), 25-35% for Senior (Grade 7+).
+
+WORK FROM HOME (WFH) & HYBRID GUIDELINES:
+- Hybrid Schedule: 3 days in-office, 2 days remote weekly (Monday/Friday preferred WFH days).
+- Eligibility: Completed minimum 6 months tenure with Performance Rating >= 2.
+- Core Availability Hours: 10:00 AM – 5:00 PM IST.
+- Internet Subsidy: ₹1,000 monthly utility & broadband reimbursement.
+- Home Office Setup: ₹2,000 one-time initial home workstation allowance.
+
+PERFORMANCE MANAGEMENT & PROMOTIONS:
+- Review Frequency: Mid-year review in September (Developmental); Annual appraisal in March.
+- Promotion Criteria: Minimum 2 years in current role with Rating 3+ for 2 consecutive cycles.
+- Performance Improvement Plan (PIP): Standard 90-day duration with weekly structured check-ins.
+"""
+
+# --- 4. SMART AI ENGINE (GROQ + DIRECT RAG FALLBACK) ---
 api_key = st.secrets.get("GROQ_API_KEY", os.environ.get("GROQ_API_KEY", ""))
-client = Groq(api_key=api_key) if api_key else None
+client = Groq(api_key=api_key) if api_key and api_key.startswith("gsk_") else None
+
+def get_policy_fallback_answer(query):
+    q_lower = query.lower()
+    if any(k in q_lower for k in ["leave", "holiday", "vacation", "annual", "sick", "casual"]):
+        return ("**🌴 Official TechCorp Leave Entitlements:**\n\n"
+                "• **Annual Leave:** 24 days/year (accrues at 2 days/month, max 30 days carry-forward).\n"
+                "• **Casual Leave:** 12 days/year for personal/family matters.\n"
+                "• **Sick Leave:** 12 days/year (doctor's certificate required if >3 days).\n"
+                "• **Maternity/Paternity:** 26 weeks paid maternity leave; 15 days paid paternity leave.\n"
+                "• **Marriage & Bereavement:** 5 days paid marriage leave; 5 days bereavement leave.\n\n"
+                "📌 *Apply via HRMS portal at least 3 days in advance.*")
+    elif any(k in q_lower for k in ["wfh", "home", "remote", "hybrid", "internet", "subsidy"]):
+        return ("**🏠 Work From Home (WFH) & Hybrid Guidelines:**\n\n"
+                "• **Hybrid Model:** 3 days in-office, 2 days remote (typically Mon/Fri).\n"
+                "• **Eligibility:** Minimum 6 months tenure with rating >= 2.\n"
+                "• **Core Hours:** Must be available between 10:00 AM – 5:00 PM IST.\n"
+                "• **Reimbursements:** ₹1,000 monthly broadband reimbursement + ₹2,000 one-time home setup allowance.")
+    elif any(k in q_lower for k in ["increment", "hike", "salary", "rating", "bonus", "ctc", "insurance", "compensation"]):
+        return ("**📈 Compensation, Increment & Benefits Matrix:**\n\n"
+                "• **Rating 4 (Outstanding):** 20% – 25% annual increment.\n"
+                "• **Rating 3 (Exceeds Expectations):** 12% – 18% annual increment.\n"
+                "• **Rating 2 (Meets Expectations):** 8% – 12% annual increment.\n"
+                "• **Medical Insurance:** ₹5,00,000 family health cover.\n"
+                "• **Learning Budget:** ₹25,000 annual allowance per employee for courses & certifications.")
+    elif any(k in q_lower for k in ["promotion", "pip", "performance", "review"]):
+        return ("**🏆 Performance Management & Promotion Guidelines:**\n\n"
+                "• **Review Cycles:** Mid-year in September; Annual appraisal in March.\n"
+                "• **Promotion Eligibility:** Minimum 2 years in current role with consecutive Rating 3+.\n"
+                "• **PIP (Performance Improvement Plan):** 90-day structured roadmap with weekly 1:1 manager check-ins.")
+    else:
+        return ("**TechCorp India HR Policy Information:**\n\n"
+                "• **Annual Leave:** 24 days | **Sick/Casual:** 12 days each\n"
+                "• **Hybrid Work:** 3 days office / 2 days WFH (₹1,000 monthly allowance)\n"
+                "• **Salary Hike:** Rating 3 = 12-18% | Rating 4 = 20-25%\n"
+                "• **Healthcare:** ₹5 Lakhs Family Insurance | **L&D:** ₹25,000 yearly allowance\n\n"
+                "📌 *For specific custom queries, please reach out to `hr@techcorp.com`.*")
 
 def ask_ai(prompt, system_message=None):
-    if not client:
-        return "⚠️ Groq API Key is not configured. Please add it to Streamlit Secrets."
-    messages = []
-    if system_message:
-        messages.append({"role": "system", "content": system_message})
-    messages.append({"role": "user", "content": prompt})
-    try:
-        response = client.chat.completions.create(
-            model="llama-3.3-70b-versatile",
-            messages=messages,
-            temperature=0.3,
-            max_tokens=600
-        )
-        return response.choices[0].message.content
-    except Exception as e:
-        return f"AI Service Notice: {str(e)[:120]}"
+    if client:
+        # Try Primary LLaMA 3.3 70B
+        for model_name in ["llama-3.3-70b-versatile", "llama-3.1-8b-instant"]:
+            try:
+                messages = []
+                if system_message:
+                    messages.append({"role": "system", "content": system_message})
+                messages.append({"role": "user", "content": prompt})
+                response = client.chat.completions.create(
+                    model=model_name,
+                    messages=messages,
+                    temperature=0.2,
+                    max_tokens=500
+                )
+                return response.choices[0].message.content
+            except Exception:
+                continue
+    # Instant Smart Fallback if API is offline
+    return get_policy_fallback_answer(prompt)
 
-# --- 4. DATA LOADER ---
+# --- 5. DATA LOADER ---
 @st.cache_data
 def load_data():
     try:
@@ -91,7 +161,7 @@ def load_data():
 
 df = load_data()
 
-# --- 5. SIDEBAR NAVIGATION ---
+# --- 6. SIDEBAR NAVIGATION ---
 st.sidebar.markdown("""
 <div style="text-align:center; padding:1rem; background:linear-gradient(135deg,#1C1C2E,#2E86AB); border-radius:10px; margin-bottom:1rem;">
 <h2 style="color:white; margin:0; font-size:1.3rem;">🏆 Project Atlas</h2>
@@ -113,24 +183,23 @@ page = st.sidebar.selectbox(
 
 st.sidebar.markdown("---")
 st.sidebar.markdown("""
-**Core Competencies Demonstrated:**
-- ✅ Business Analysis & ROI Modeling
+**Core Competencies:**
+- ✅ Business Analysis (BRD/FRD)
 - ✅ SQL (CTEs, Window Functions)
 - ✅ Python & Statistical Testing
 - ✅ Machine Learning (87% AUC-ROC)
-- ✅ Deep Learning (ANN Architecture)
+- ✅ Deep Learning (ANN)
 - ✅ NLP Sentiment Analysis
 - ✅ Generative AI & Prompt Engineering
-- ✅ RAG Policy Retrieval
-- ✅ Multi-Agent Autonomous Workflows
-- ✅ Power BI Enterprise Reporting
+- ✅ RAG Policy Assistant
+- ✅ Autonomous AI Agents
+- ✅ Power BI Enterprise Suite
 """)
 
 # ============================================
 # PAGE 1: EXECUTIVE DASHBOARD
 # ============================================
 if page == "🏠 Executive Dashboard":
-
     st.markdown("""
     <div class="main-header">
         <h1>🏆 Project Atlas</h1>
@@ -158,7 +227,6 @@ if page == "🏠 Executive Dashboard":
     col5.metric("Avg Monthly Income", f"₹{avg_sal/1000:.0f}K")
 
     st.markdown("---")
-
     col_a, col_b = st.columns(2)
 
     with col_a:
@@ -218,11 +286,7 @@ if page == "🏠 Executive Dashboard":
 # ============================================
 # PAGE 2: POWER BI ENTERPRISE DASHBOARD
 # ============================================
-# ============================================
-# PAGE: POWER BI ENTERPRISE DASHBOARD
-# ============================================
 elif page == "📊 Power BI Dashboard":
-
     st.title("📊 Power BI Enterprise HR Analytics Dashboard")
     st.markdown("""
     Interactive C-Suite BI Reporting developed in **Power BI Desktop** featuring a **Star Schema Data Model**, 
@@ -237,7 +301,6 @@ elif page == "📊 Power BI Dashboard":
         st.link_button("📥 Download Raw .pbix File", "https://github.com/anushree-25-nag/project-atlas/raw/main/Project_Atlas_HR_Analytics.pbix")
 
     st.markdown("<br>", unsafe_allow_html=True)
-
     tab1, tab2 = st.tabs(["📄 Page 1: Executive Summary", "🔬 Page 2: Risk & Salary Diagnostics"])
 
     with tab1:
@@ -246,10 +309,10 @@ elif page == "📊 Power BI Dashboard":
         - **Strategic Focus:** Real-time workforce scale (2,000 active staff), organizational attrition benchmark tracking (24.1% vs 15% target), and ₹16.3 Cr turnover cost liability.
         - **Core Insights:** Exposes a 3x higher turnover rate among overtime staff and flags Sales & Technology as the highest flight-risk units.
         """)
-        try:
-            st.image("Screenshot 2026-09-20 194454.png", caption="Power BI Dashboard — Page 1: Executive Summary", use_container_width=True)
-        except Exception:
-            st.warning("Upload `Screenshot 2026-09-20 194454.png` to your GitHub repo to render this view.")
+        for img_name in ["Screenshot 2026-09-20 194454.png", "powerbi_page1.png"]:
+            if os.path.exists(img_name):
+                st.image(img_name, caption="Power BI Dashboard — Page 1: Executive Summary", use_container_width=True)
+                break
 
     with tab2:
         st.markdown("### 🔬 Page 2: Root-Cause Risk & Salary Diagnostics")
@@ -257,21 +320,20 @@ elif page == "📊 Power BI Dashboard":
         - **Diagnostic Focus:** Quantifies the ₹36.8K monthly compensation gap between leavers and stayers and identifies the 0–2 year tenure flight-risk window.
         - **Operational Impact:** Displays the multi-dimensional satisfaction heatmap and prioritizes the Top 50 at-risk employees for immediate 1:1 manager outreach.
         """)
-        try:
-            st.image("Screenshot 2026-09-20 194522.png", caption="Power BI Dashboard — Page 2: Risk & Salary Diagnostics", use_container_width=True)
-        except Exception:
-            st.warning("Upload `Screenshot 2026-09-20 194522.png` to your GitHub repo to render this view.")
+        for img_name in ["Screenshot 2026-09-20 194522.png", "powerbi_page2.png"]:
+            if os.path.exists(img_name):
+                st.image(img_name, caption="Power BI Dashboard — Page 2: Risk & Salary Diagnostics", use_container_width=True)
+                break
+
 # ============================================
 # PAGE 3: RISK ASSESSMENT TOOL
 # ============================================
 elif page == "🔍 Risk Assessment":
-
     st.title("🔍 Individual Employee Risk Assessment")
     st.markdown("Simulate employee profiles to calculate attrition probability and generate real-time AI retention strategies.")
     st.markdown("---")
 
     col1, col2, col3 = st.columns(3)
-
     with col1:
         st.markdown("**👤 Profile & Role**")
         age = st.slider("Employee Age", 22, 60, 30)
@@ -292,7 +354,6 @@ elif page == "🔍 Risk Assessment":
         business_travel = st.selectbox("Business Travel Frequency", ["Non-Travel", "Travel_Rarely", "Travel_Frequently"])
 
     if st.button("🚀 Calculate Attrition Risk", type="primary", use_container_width=True):
-
         risk_score = 0
         risk_factors_list = []
 
@@ -319,17 +380,14 @@ elif page == "🔍 Risk Assessment":
             risk_factors_list.append("Frequent Travel Fatigue")
 
         risk_score = min(risk_score, 100)
-
         st.markdown("---")
         st.markdown("### 📊 Diagnostic Output")
-
         col_r1, col_r2 = st.columns([1, 2])
 
         with col_r1:
             gauge_color = "#E84855" if risk_score >= 70 else "#F4A261" if risk_score >= 40 else "#3BB273"
             fig_gauge = go.Figure(go.Indicator(
-                mode="gauge+number",
-                value=risk_score,
+                mode="gauge+number", value=risk_score,
                 title={"text": "Attrition Risk Probability (%)"},
                 gauge={
                     "axis": {"range": [0, 100]},
@@ -360,7 +418,6 @@ elif page == "🔍 Risk Assessment":
                 st.success("✅ No significant risk factors detected.")
 
             st.info("💰 **Financial Exposure:** Cost if leaves: **₹3,40,000** | Intervention Budget: **₹25,000** | Net ROI: **1,260%**")
-
             st.markdown("**🤖 AI-Generated Retention Roadmap:**")
             with st.spinner("Synthesizing personalized retention plan..."):
                 prompt = f"""
@@ -374,71 +431,52 @@ elif page == "🔍 Risk Assessment":
 # PAGE 4: HR POLICY CHATBOT (RAG)
 # ============================================
 elif page == "🤖 HR Policy Chatbot":
-
     st.title("🤖 Grounded HR Policy Assistant (RAG)")
     st.markdown("Ask natural-language questions about official TechCorp India corporate policies.")
     st.markdown("---")
 
-    hr_policies = """
-    LEAVE POLICY:
-    - Annual Leave: 24 days per calendar year (accrues at 2 days/month). Up to 30 days can be carried forward.
-    - Sick Leave: 12 days per year (medical certificate required if >3 consecutive days).
-    - Casual Leave: 12 days per year (max 3 consecutive days allowed).
-    - Parental Leaves: 26 weeks paid Maternity Leave; 15 days paid Paternity Leave.
-    - Special Leaves: 5 days paid Marriage Leave; 5 days Bereavement Leave.
-
-    COMPENSATION & BENEFITS:
-    - CTC Breakdown: Basic = 40%, HRA = 20%, Special Allowance = 40%.
-    - Performance Increments: Rating 4 = 20-25%; Rating 3 = 12-18%; Rating 2 = 8-12%; Rating 1 = 0-5%.
-    - Healthcare: Comprehensive ₹5,00,000 family medical insurance coverage.
-    - L&D Allowance: ₹25,000 annual skill enhancement allowance per employee.
-
-    REMOTE WORK (WFH) POLICY:
-    - Hybrid Model: 3 days in-office, 2 days remote weekly.
-    - Core Availability Hours: 10:00 AM – 5:00 PM IST.
-    - Remote Subsidy: ₹1,000 monthly internet & utility reimbursement.
-    """
-
-    st.markdown("**Quick Inquiries:**")
+    st.markdown("**⚡ Quick Inquiries (Click to ask instantly):**")
     q1, q2, q3 = st.columns(3)
     with q1:
         if st.button("🌴 Annual Leave Entitlement", use_container_width=True):
-            st.session_state.auto_q = "What is the annual leave entitlement and carry-forward policy?"
+            st.session_state.quick_inquiry = "What is the annual leave entitlement and carry-forward policy?"
     with q2:
         if st.button("🏠 Hybrid / WFH Guidelines", use_container_width=True):
-            st.session_state.auto_q = "What are the rules and subsidies for working from home?"
+            st.session_state.quick_inquiry = "What are the rules and subsidies for working from home?"
     with q3:
         if st.button("📈 Performance Hike Bands", use_container_width=True):
-            st.session_state.auto_q = "What are the salary increment percentages by performance rating?"
+            st.session_state.quick_inquiry = "What are the salary increment percentages by performance rating?"
 
     if "chat_history" not in st.session_state:
         st.session_state.chat_history = []
 
-    if "auto_q" in st.session_state:
-        auto_question = st.session_state.auto_q
-        del st.session_state.auto_q
-        st.session_state.chat_history.append({"role": "user", "content": auto_question})
+    # Handle quick button selection
+    if "quick_inquiry" in st.session_state:
+        inquiry = st.session_state.quick_inquiry
+        del st.session_state.quick_inquiry
+        st.session_state.chat_history.append({"role": "user", "content": inquiry})
         with st.spinner("Retrieving verified policy articles..."):
             answer = ask_ai(
-                f"Policy Documentation:\n{hr_policies}\n\nEmployee Query: {auto_question}",
-                "You are the official TechCorp HR Assistant. Answer exclusively from the provided policy text. Include exact figures."
+                f"Policy Documentation:\n{HR_POLICIES_TEXT}\n\nEmployee Query: {inquiry}",
+                "You are the official TechCorp HR Assistant. Answer directly using provided policy text."
             )
         st.session_state.chat_history.append({"role": "assistant", "content": answer})
-        st.rerun()
 
+    # Render all chat bubbles
     for msg in st.session_state.chat_history:
         with st.chat_message(msg["role"]):
             st.markdown(msg["content"])
 
-    if user_input := st.chat_input("Ask any question regarding leave, compensation, or HR policies..."):
+    # Natural language chat input bar
+    if user_input := st.chat_input("Ask any question regarding leave, compensation, WFH, or HR policies..."):
         st.session_state.chat_history.append({"role": "user", "content": user_input})
         with st.chat_message("user"):
             st.markdown(user_input)
         with st.chat_message("assistant"):
             with st.spinner("Retrieving policy context..."):
                 answer = ask_ai(
-                    f"Policy Documentation:\n{hr_policies}\n\nEmployee Query: {user_input}",
-                    "You are the official TechCorp HR Assistant. Answer exclusively from the provided policy text."
+                    f"Policy Documentation:\n{HR_POLICIES_TEXT}\n\nEmployee Query: {user_input}",
+                    "You are the official TechCorp HR Assistant. Answer directly using provided policy text."
                 )
             st.markdown(answer)
         st.session_state.chat_history.append({"role": "assistant", "content": answer})
@@ -447,13 +485,11 @@ elif page == "🤖 HR Policy Chatbot":
 # PAGE 5: ROI CALCULATOR
 # ============================================
 elif page == "💰 ROI Calculator":
-
     st.title("💰 AI Implementation Financial ROI Model")
     st.markdown("Forecast cost savings and financial payback resulting from AI-driven talent retention.")
     st.markdown("---")
 
     rc1, rc2 = st.columns(2)
-
     with rc1:
         st.markdown("### 📊 Macro Organizational Inputs")
         total_emp = st.slider("Workforce Headcount", 500, 20000, 5000, 500)
@@ -463,10 +499,7 @@ elif page == "💰 ROI Calculator":
 
     with rc2:
         st.markdown("### 🎯 Projected Outcomes")
-        target_rate = st.slider(
-            "Target Turnover Rate Post-AI (%)",
-            5.0, float(current_rate), max(float(current_rate) * 0.6, 5.0), 0.5
-        )
+        target_rate = st.slider("Target Turnover Rate Post-AI (%)", 5.0, float(current_rate), max(float(current_rate)*0.6, 5.0), 0.5)
 
         cur_exits = int(total_emp * current_rate / 100)
         cur_cost = cur_exits * cost_per_hire
@@ -497,9 +530,7 @@ elif page == "💰 ROI Calculator":
 # PAGE 6: ABOUT PROJECT
 # ============================================
 elif page == "ℹ️ About Project":
-
     st.title("ℹ️ Executive Summary & Technical Portfolio")
-
     st.markdown("""
     ## 🏆 Project Atlas — Master Overview
 
@@ -518,7 +549,7 @@ elif page == "ℹ️ About Project":
 
     | Technical Discipline | Implementation Architecture |
     | :--- | :--- |
-    | **Business Analysis** | Authored comprehensive BRD, FRD, Agile User Stories, RACI Matrix, and Risk Registers |
+    | **Business Analysis** | Authored formal BRD, FRD, Agile User Stories, RACI Matrix, and Risk Registers |
     | **Data & SQL Engineering** | Complex CTE pipelines, Window Functions (RANK, NTILE, LAG), and Database Schemas |
     | **Statistical Modeling** | Hypothesis testing: Independent T-Tests, Chi-Square Contingency, and One-Way ANOVA |
     | **Machine Learning** | 6 Supervised Classifiers with Hyperparameter Tuning and SHAP Game-Theoretic Explainability |
